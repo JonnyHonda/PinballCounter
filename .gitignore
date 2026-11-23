@@ -1,0 +1,10 @@
+# EAGLE backup / lock files
+*.s#?
+*.b#?
+*.l#?
+*.lck
+*.bak
+
+# Python
+__pycache__/
+*.pyc
