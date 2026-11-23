@@ -19,6 +19,19 @@ from xml.sax.saxutils import escape, quoteattr
 
 U = 2.54            # 0.1 inch grid, mm
 STUB = 2 * U        # net stub length
+
+# Net classes: (number, name, track width mm, drill mm). Shared with gen_board.py.
+CLASSES = [(0, "default", 0.3048, 0), (1, "power", 0.8128, 0)]
+POWER_NETS = {"VCC", "GND"}
+
+
+def net_class(net):
+    return 1 if net in POWER_NETS else 0
+
+
+def classes_xml():
+    return "<classes>" + "".join(
+        f'<class number="{n}" name="{nm}" width="{w}" drill="{d}"/>' for n, nm, w, d in CLASSES) + "</classes>"
 OUT = "PinballCounter.sch"
 
 
@@ -51,10 +64,11 @@ def rect(x1, y1, x2, y2, layer, width=0.254):
 def dip(n):
     half = n // 2
     x0 = -(half - 1) * U / 2
-    pads = [(str(i + 1), x0 + i * U, -3.81, "long", "R90") for i in range(half)]
+    pads = [(str(i + 1), x0 + i * U, -3.81, "square" if i == 0 else "long", "R90") for i in range(half)]
     pads += [(str(half + i + 1), -x0 - i * U, 3.81, "long", "R90") for i in range(half)]
     w = half * U / 2
-    p = Package(f"DIP{n}", pads, rect(-w, -2.8, w, 2.8, 21))
+    notch = f'<wire x1="{f(-w)}" y1="-1.016" x2="{f(-w)}" y2="1.016" width="0.254" layer="21" curve="-180"/>'
+    p = Package(f"DIP{n}", pads, rect(-w, -2.8, w, 2.8, 21) + [notch])
     p.text_y = 5.5
     return p
 
@@ -71,7 +85,7 @@ def seg_pkg():
 
 def header(n):
     x0 = -(n - 1) * U / 2
-    pads = [(str(i + 1), x0 + i * U, 0, "long", "R90") for i in range(n)]
+    pads = [(str(i + 1), x0 + i * U, 0, "square" if i == 0 else "long", "R90") for i in range(n)]
     w = n * U / 2
     p = Package(f"1X{n:02d}", pads, rect(-w, -1.27, w, 1.27, 21))
     p.text_y = 2.5
@@ -293,7 +307,7 @@ class Sch:
                         f'<wire x1="{f(x)}" y1="{f(y)}" x2="{f(x2)}" y2="{f(y)}" width="0.1524" layer="91"/>'
                         f'<label x="{f(x2)}" y="{f(y)}" size="1.778" layer="95"{rot}/></segment>')
                 if segs:
-                    nets.append(f'<net name={quoteattr(net)} class="0">' + "".join(segs) + "</net>")
+                    nets.append(f'<net name={quoteattr(net)} class="{net_class(net)}">' + "".join(segs) + "</net>")
             sheets.append("<sheet><plain>" + "".join(sh["plain"]) + "</plain><instances>"
                           + "\n".join(sh["inst"]) + "</instances><busses/><nets>\n"
                           + "\n".join(nets) + "\n</nets></sheet>")
@@ -320,7 +334,7 @@ class Sch:
 </libraries>
 <attributes/>
 <variantdefs/>
-<classes><class number="0" name="default" width="0" drill="0"/></classes>
+{classes_xml()}
 <parts>
 {chr(10).join(parts)}
 </parts>

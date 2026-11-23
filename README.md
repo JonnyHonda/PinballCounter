@@ -10,13 +10,19 @@ reels: when a digit goes 9 → 0, it adds 1 to the digit on its left.
 | File | What it is |
 |---|---|
 | `PinballCounter.sch` | Autodesk EAGLE 9.x schematic (3 sheets, embedded library `pinball_ttl`) |
+| `PinballCounter.brd` | EAGLE 9.x board: parts placed, connections as airwires, not yet routed |
 | `gen_schematic.py` | Python 3 script that generates the schematic. Edit this, then rerun it; don't hand-edit the `.sch` file if you want to keep regenerating it. |
+| `gen_board.py` | Generates the board from the same part and net data, so the schematic and board stay consistent |
 
-Regenerate with:
+Regenerate both with:
 
 ```sh
-python3 gen_schematic.py
+python3 gen_schematic.py && python3 gen_board.py
 ```
+
+> Once you start routing in EAGLE, the `.brd` file holds your work, so
+> rerunning `gen_board.py` would overwrite it. After that point, make
+> changes in EAGLE.
 
 The script runs a self-check (every symbol pin maps to a pad, no pad is used
 twice, no net has only one connection). It prints any problems before writing
@@ -110,6 +116,55 @@ label are connected, including across sheets.
 **Power:** 5 V regulated, at least 1 A. All segments lit draws about 600 mA
 for the LEDs plus about 300 mA for the logic.
 
+## Board layout
+
+**Size:** 194.9 × 160 mm, 2 layers, 4 × M3 mounting holes (3.2 mm) in the
+corners.
+
+**Arrangement (top view):** one column per digit, with digit 8 on the left
+so the score reads normally. Each column, from top to bottom:
+
+1. 7-segment display (with a silkscreen label for its place value: 10 000 000 … 1)
+2. Seven 330 Ω segment resistors
+3. 74LS47 decoder, then its 100 nF decoupling capacitor
+4. 74LS192 counter
+
+The lower part of the board holds the shared logic, from top to bottom:
+
+- **74LS08 row:** two 74LS08s. U18 serves digits 5–8 and U17 serves digits
+  1–4.
+- **74LS221 row:** four 74LS221s, each under the two digits it serves.
+- **R/C row:** each digit's pull-up, timing resistor and timing capacitor,
+  standing vertically under its 74LS221.
+- **Bottom edge:** J2 (+5 V / GND), C33 bulk capacitor, S1 reset, R73, C9,
+  U23 (74LS14) and J1 (switch inputs, labelled SW1–SW8 / GND on the
+  silkscreen).
+
+**Details**
+- All DIP chips use 0.3" footprints with a square pin-1 pad and a notch
+  marking. Chips in the digit columns are rotated so pin 1 is at the top
+  left.
+- Each IC has its own 100 nF capacitor placed next to it.
+- The segment resistors are stacked in the same order as the 74LS47 output
+  pins (f, g, a, b, c, d, e, from bottom to top), so their tracks fan out
+  without crossing.
+- **Net classes:** `default` is 0.3 mm (12 mil) and `power` is 0.81 mm
+  (32 mil). The power class covers VCC and GND.
+- **GND** is a copper pour on the bottom layer, covering the whole board.
+
+**Routing (to do in EAGLE)**
+1. Open `PinballCounter.sch`. The board opens with it, and forward/back
+   annotation should report the two files as consistent.
+2. In the board, press **Ratsnest** to calculate the GND pour.
+3. Route **VCC** first, by hand or with the autorouter limited to VCC. Use
+   wide traces, ideally a tree from J2 running along each IC column.
+4. Run **AUTO** for everything else, with 2 layers, a 0.3 mm track width,
+   and the default via size.
+5. Run **DRC** and fix any violations.
+
+> **EAGLE edition:** this board is about 312 cm², which is larger than the
+> EAGLE Free limit of 80 cm². Routing it needs a paid edition.
+
 ## Chip pinouts used (DIP)
 
 **74LS192:** 1 P1 · 2 Q1 · 3 Q0 · 4 CPD · 5 CPU · 6 Q2 · 7 Q3 · 8 GND ·
@@ -168,5 +223,6 @@ These pins are deliberately left unconnected:
 - [ ] Open in EAGLE, run ERC, and fix any import issues
 - [ ] Breadboard one or two digits to confirm the trigger/carry timing
 - [ ] Add an overflow LED on U8 `/TCU`
-- [ ] Board layout (`.brd`)
+- [x] Board placement (`.brd`)
+- [ ] Route the board (EAGLE autorouter + DRC) and generate Gerbers
 - [ ] Optional: a multiplexed display version to reduce the chip count
